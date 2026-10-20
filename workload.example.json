@@ -1,0 +1,9 @@
+{
+  "working_days_per_month": 21,
+  "agents": [
+    {"name": "ops-triage", "runs_per_working_day": 6, "minutes_per_run": 12},
+    {"name": "support-reply", "runs_per_working_day": 20, "minutes_per_run": 4},
+    {"name": "release-notes", "runs_per_working_day": 2, "minutes_per_run": 25},
+    {"name": "finance-reconcile", "runs_per_working_day": 1, "minutes_per_run": 40}
+  ]
+}
