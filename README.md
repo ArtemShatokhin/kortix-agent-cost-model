@@ -10,13 +10,25 @@ python3 agent_cost_model.py --sessions-per-day 25 --minutes-per-session 12
 Profile: 750 sessions/month, 12 min each, 2 vCPU / 4 GiB, 20 GiB storage, 6 seats
 
 vendor      monthly  arithmetic
-----------------------------------------------------------------------------------------
-E2B         $150.02  12 min = 720 s x $2.8e-05 + $150 plan base
-Daytona       $1.20  0.2 h x 2 vCPU x $0.0504 = $0.0202; 0.2 h x 4 GiB x $0.0162 = $0.0130; ...
-Kortix      $100.00  25 sessions/day x 12 min x 30 days = 9000 credit-minutes; free plan grants ...
+------------------------------------------------------------------------------------------------
+E2B         $165.12  750 sessions x 12 min = 720 s x $2.8e-05 + $150 plan base
+Daytona      $26.01  750 x 0.2 h x 2 vCPU x $0.0504 = $15.1200; 750 x 0.2 h x 4 GiB x $0.0162 = $9.7200; 15 GiB storage beyond the free 5 = $1.1664
+Kortix       $50.00  25 sessions/day x 12 min x 30 days = 9000 min = 150 h x 11 credits/h; free plan grants 500/month, each paid plan $50 adds 5000; seats x $0 = $0
+------------------------------------------------------------------------------------------------
+Rates: E2B https://e2b.dev/pricing, Daytona https://www.daytona.io/pricing, Kortix https://kortix.com/pricing
+Both sandbox cards bill per second while a session runs; a stopped session draws nothing on either.
 ```
 
-That output is the whole argument of this repository: **the same workload lands at $1.20, $100 and $150 depending on which line the vendor meters**, and a comparison that quotes one vendor's headline price against another's usage line is not a comparison. No vendor is cheapest for every profile. Daytona bills only compute, memory and storage, so a team that runs short sessions pays almost nothing there. E2B's Pro plan carries a $150 monthly base before a single second of compute. A pooled-credit plan prices the sandbox and the seats separately, which is cheaper than both for a small team and different again once the pool runs out.
+That output is the whole argument of this repository: **the same month lands at $26.01, $50.00 and $165.12 depending on which line the vendor meters**, and a comparison that quotes one vendor's headline price against another's usage line is not a comparison. No vendor is cheapest for every profile. Daytona bills compute, memory and storage and nothing else, so 750 short sessions come to $26.01, the lowest of the three here. E2B's Pro plan carries a $150 monthly base before a single second of compute, and $150 of its $165.12 is that base. A pooled-credit plan charges no seat fee and prices the sandbox in credits, so this profile is 1,650 credits and buys the first $50 plan, above Daytona's $26.01 for the same work. Run your own profile and read the arithmetic beside each row before you compare one vendor's line to another's.
+
+## Docs
+
+Four pages sit beside the script.
+
+- [Sandbox cost of production write access](docs/sandbox-cost-of-production-write-access.md): what the wait for an approval adds to a month, priced on all three cards.
+- [Reading the output](docs/reading-the-output.md): what each column counts, and which one reconciles against the invoice.
+- [Cost per outcome](docs/cost-per-outcome.md): the month divided by what it produced.
+- [Fitting the rates to your own numbers](docs/fitting-the-rates.md): a reservation, a server you own, or your own vendor's rates.
 
 ## What it models
 
@@ -44,7 +56,7 @@ Every row also prints the page its rates came from. Add `--json` to diff two pro
 
 ## Assumptions the script states instead of hiding
 
-- **One credit-minute.** Kortix publishes a pooled credit grant, not a per-minute rate, so the model treats one credit as one minute of the default 2 vCPU sandbox, scales other sizes by the vendor-ladder ratio it already holds, and prints the count it derived. Change `rates.json` or the scaling if your own credit consumption differs; the point is that the assumption is visible and one line long.
+- **Eleven credits an hour.** Kortix publishes a pooled credit grant rather than a per-minute rate, and [kortix.com/pricing](https://kortix.com/pricing) states 11 credits for an hour of the default 2 vCPU / 4 GB / 20 GB machine, which is about 5 minutes of computer a credit at a cent each. The model takes that rate, scales other sandbox sizes by the vendor-ladder ratio it already holds, and prints the count it derived. Change `rates.json` or the scaling if your own credit consumption differs; the point is that the assumption is visible and one line long.
 - **30-day months, 24-hour days.** Storage on Daytona is charged for the month; compute is charged for the minutes a session actually runs.
 - **A stopped session is free** on every card here. None of the three prices idle time on a session that has ended.
 - **No models, no connectors, no egress.** Token spend belongs to whichever provider serves the model and is not in these numbers on any row.
