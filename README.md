@@ -1,66 +1,58 @@
-# An open source agent cost model: a budget is a compute schedule
+# agent-cost-model — open source cost model for agent sessions
 
-Kortix is the open-source AI Operating System. An agent budget is a compute schedule: hours of a cloud computer at a published rate. This repository holds a small open source Python program that turns a working routine into a monthly figure you can put in front of a finance owner. Give it how often each agent runs and how long a run takes. It returns the dollars, and the arithmetic behind every one of them. It calls no network service and needs no credentials.
+Put the same month of agent work through three published rate cards and see what each one charges, with the arithmetic printed next to every number. Rates live in `rates.json` with the page each was read from and the date it was checked.
 
-The three docs pages cover the columns (`docs/reading-the-output.md`), replacing the rates (`docs/fitting-the-rates.md`), and turning the monthly figure into a cost per outcome (`docs/cost-per-outcome.md`).
-
-## Run the example
-
-Four agents, 21 working days in the month, one command:
-
-```
-python3 cost_model.py workload.example.json
+```bash
+python3 agent_cost_model.py --sessions-per-day 25 --minutes-per-session 12
 ```
 
 ```
-rates from https://kortix.com/pricing (checked 2026-10-20)
-agent                hours     vCPU   memory  storage    total
---------------------------------------------------------------
-ops-triage            25.2     1.63     1.09     1.05     3.77
-support-reply         28.0     1.81     1.21     1.05     4.08
-release-notes         17.5     1.13     0.76     1.05     2.94
-finance-reconcile     14.0     0.91      0.6     1.05     2.56
---------------------------------------------------------------
-vcpu 5.49 + memory 3.66 + storage 4.21 = 13.36 per month
-84.7 agent-computer hours, 931 credits
-model calls are not included; they are billed by the model provider
+Profile: 750 sessions/month, 12 min each, 2 vCPU / 4 GiB, 20 GiB storage, 6 seats
+
+vendor      monthly  arithmetic
+----------------------------------------------------------------------------------------
+E2B         $150.02  12 min = 720 s x $2.8e-05 + $150 plan base
+Daytona       $1.20  0.2 h x 2 vCPU x $0.0504 = $0.0202; 0.2 h x 4 GiB x $0.0162 = $0.0130; ...
+Kortix      $100.00  25 sessions/day x 12 min x 30 days = 9000 credit-minutes; free plan grants ...
 ```
 
-The last three lines are the answer. Four agents start 609 runs across the month. They come to `13.36` dollars of computer time, and the model calls those runs make are billed separately by whichever provider you point them at. Storage is nearly a third of the total. It is due even in a month with no runs at all.
+That output is the whole argument of this repository: **the same workload lands at $1.20, $100 and $150 depending on which line the vendor meters**, and a comparison that quotes one vendor's headline price against another's usage line is not a comparison. No vendor is cheapest for every profile. Daytona bills only compute, memory and storage, so a team that runs short sessions pays almost nothing there. E2B's Pro plan carries a $150 monthly base before a single second of compute. A pooled-credit plan prices the sandbox and the seats separately, which is cheaper than both for a small team and different again once the pool runs out.
 
-## How the model works
+## What it models
 
-The workload profile is a list of agents. Each one carries `runs_per_working_day` and `minutes_per_run`. An optional computer size defaults to 2 vCPU / 4 GB / 20 GB. From those:
+| Input | Flag | Default |
+|---|---|---|
+| Sessions per day | `--sessions-per-day` | 40 |
+| Minutes per session | `--minutes-per-session` | 12 |
+| Sandbox size (vCPU) | `--vcpu` | 2 |
+| Memory (GiB) | `--gib` | 4 |
+| Disk (GiB) | `--gib-storage` | 20 |
+| Members | `--seats` | 6 |
+| Your cost per member | `--seat-price` | 0 |
+| E2B plan | `--e2b-plan` | pro |
+| Machine-readable output | `--json` |  |
 
-```
-agent hours = runs_per_working_day * working_days_per_month * minutes_per_run / 60
-vcpu        = agent hours * vCPU count * vcpu_hour_usd
-memory      = agent hours * GB * memory_gb_hour_usd
-storage     = GB * storage_gb_month_usd
-```
+Every row also prints the page its rates came from. Add `--json` to diff two profiles in CI.
 
-Memory is charged for the hours the computer runs. Storage is a monthly charge on the disk, so it is the one line that ignores the schedule. The rates page states the rule behind that split: "Billed per second. Nothing while it is stopped." A stopped computer costs nothing to hold. The gaps between two runs never reach the bill.
+## The rates, as published (checked 2026-10-21)
 
-Set `working_days_per_month` for a shorter month. Add or remove agents in the JSON. Nothing else in the profile is required.
+| Vendor | How it meters | Rate | Source |
+|---|---|---|---|
+| E2B | per second of a running sandbox, by vCPU | $0.000014/s at 1 vCPU, $0.000028/s at 2, $0.000056/s at 4; Pro base $150/month; Enterprise $3,000/month minimum | [e2b.dev/pricing](https://e2b.dev/pricing) |
+| Daytona | compute, memory and storage, all per second from hourly component rates | $0.0504 per vCPU-hour, $0.0162 per GiB-hour, $0.000108 per GiB-hour of storage with the first 5 GiB free; $200 of free compute | [daytona.io/pricing](https://www.daytona.io/pricing) |
+| Kortix | a monthly plan with a pooled credit pool; members do not add a seat fee | free: 500 credits and 1 project; paid: $50/month for 5,000 credits | [kortix.com/pricing](https://kortix.com/pricing) |
 
-## Update the rates
+## Assumptions the script states instead of hiding
 
-The defaults in `cost_model.py` are Kortix's published rates, read from https://kortix.com/pricing on 2026-10-20. One credit is $0.01. About 11 credits buy an hour of a 2 vCPU / 4 GB / 20 GB agent computer. Cores cost $0.0324 per vCPU-hour, memory $0.0108 per GB-hour, and disk $0.0526 per GB-month.
+- **One credit-minute.** Kortix publishes a pooled credit grant, not a per-minute rate, so the model treats one credit as one minute of the default 2 vCPU sandbox, scales other sizes by the vendor-ladder ratio it already holds, and prints the count it derived. Change `rates.json` or the scaling if your own credit consumption differs; the point is that the assumption is visible and one line long.
+- **30-day months, 24-hour days.** Storage on Daytona is charged for the month; compute is charged for the minutes a session actually runs.
+- **A stopped session is free** on every card here. None of the three prices idle time on a session that has ended.
+- **No models, no connectors, no egress.** Token spend belongs to whichever provider serves the model and is not in these numbers on any row.
 
-To price another provider, or your own server, write a JSON file and pass it:
+## Why it is a script and not a table
 
-```
-python3 cost_model.py workload.example.json --rates rates.json
-```
+A table is stale the week a vendor reprices, and a reader cannot check it. Here the rate is one JSON value with a source URL beside it, the arithmetic is printed, and `--json` makes the comparison repeatable in a pull request. If a vendor changes a rate, the diff shows the rate and the date, not a rewritten paragraph.
 
-A rates file may carry any subset of the keys. Whatever it leaves out keeps its default, so a single rate change is a one-line file. Write the source URL and the date you checked it beside the numbers. Whoever reads the budget next quarter needs to know which rates produced it. `docs/fitting-the-rates.md` works a self-hosted rate through the arithmetic, person-hours included.
+## Read it, fork it, change a rate
 
-## When this model is the wrong tool
-
-A hosted tool that charges per seat bills a unit this model has no column for. Its invoice does not move when an agent runs less, so a schedule computed here will not match it. A plan with a monthly minimum has the same problem in a different shape. Dividing the minimum by the number of runs tells you what you already pay, not what a run costs.
-
-## Where this sits
-
-- Kortix: https://kortix.com
-- A worked cost page built on the same published rates: https://opensourceaiagentplatform.com/agent-computer-cost
-- The starter repository with the `kortix.yaml` quoted in the docs: https://github.com/ArtemShatokhin/kortix-ai-agent-platform-starter
+Open source, standard library only, Python 3.9 or newer, no network calls and no vendor SDK. Copy `rates.json` for your own vendors and the script runs unchanged. Corrections are welcome: a rate with the page you read it from and the date beats an opinion.
