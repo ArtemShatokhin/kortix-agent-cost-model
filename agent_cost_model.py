@@ -28,27 +28,30 @@ def load_rates() -> dict:
         return json.load(fh)
 
 
-def e2b_monthly(rates: dict, minutes: float, vcpu: int, plan: str) -> dict:
+def e2b_monthly(rates: dict, minutes: float, vcpu: int, plan: str, sessions: int) -> dict:
     e2b = rates["e2b"]
     per_second = e2b["per_second_by_vcpu"][str(vcpu)]
     seconds = minutes * 60
-    usage = seconds * per_second
+    usage = seconds * per_second * sessions
     base = e2b["pro_base_monthly_usd"] if plan == "pro" else 0.0
     return {
         "vendor": "E2B",
         "per_second_usd": per_second,
         "plan_base_usd": base,
         "monthly_usd": round(usage + base, 2),
-        "arithmetic": f"{minutes:g} min = {seconds:g} s x ${per_second} + ${base:g} plan base",
+        "arithmetic": (
+            f"{sessions} sessions x {minutes:g} min = {seconds:g} s x ${per_second} "
+            f"+ ${base:g} plan base"
+        ),
         "source": e2b["source"],
     }
 
 
-def daytona_monthly(rates: dict, minutes: float, vcpu: int, gib: float, gib_storage: float) -> dict:
+def daytona_monthly(rates: dict, minutes: float, vcpu: int, gib: float, gib_storage: float, sessions: int) -> dict:
     d = rates["daytona"]
     hours = minutes / 60
-    compute = hours * vcpu * d["vcpu_hour_usd"]
-    memory = hours * gib * d["gib_memory_hour_usd"]
+    compute = hours * vcpu * d["vcpu_hour_usd"] * sessions
+    memory = hours * gib * d["gib_memory_hour_usd"] * sessions
     storage_gib = max(0.0, gib_storage - d["storage_free_gib"])
     storage = storage_gib * d["gib_storage_hour_usd"] * DAYS_PER_MONTH * 24
     return {
@@ -58,8 +61,8 @@ def daytona_monthly(rates: dict, minutes: float, vcpu: int, gib: float, gib_stor
         "storage_usd": round(storage, 4),
         "monthly_usd": round(compute + memory + storage, 2),
         "arithmetic": (
-            f"{hours:g} h x {vcpu} vCPU x ${d['vcpu_hour_usd']} = ${compute:.4f}; "
-            f"{hours:g} h x {gib:g} GiB x ${d['gib_memory_hour_usd']} = ${memory:.4f}; "
+            f"{sessions} x {hours:g} h x {vcpu} vCPU x ${d['vcpu_hour_usd']} = ${compute:.4f}; "
+            f"{sessions} x {hours:g} h x {gib:g} GiB x ${d['gib_memory_hour_usd']} = ${memory:.4f}; "
             f"{storage_gib:g} GiB storage beyond the free {d['storage_free_gib']} = ${storage:.4f}"
         ),
         "source": d["source"],
@@ -80,7 +83,7 @@ def credits_monthly(rates: dict, sessions_per_day: int, minutes: float, vcpu: in
     # minutes by the vendor's own 1/2/4/8 vCPU ladder rather than inventing a factor.
     ladder = rates["e2b"]["per_second_by_vcpu"]
     scale = ladder[str(vcpu)] / ladder["2"]
-    credits_needed = monthly_minutes * scale
+    credits_needed = monthly_minutes / 60 * k["credits_per_hour"] * scale
     free_covers = credits_needed <= k["free_monthly_credits"]
     paid_plans = 0
     remainder = max(0.0, credits_needed - k["free_monthly_credits"])
@@ -96,7 +99,8 @@ def credits_monthly(rates: dict, sessions_per_day: int, minutes: float, vcpu: in
         "monthly_usd": round(paid_plans * k["paid_monthly_usd"] + seat_cost, 2),
         "arithmetic": (
             f"{sessions_per_day} sessions/day x {minutes:g} min x {DAYS_PER_MONTH} days "
-            f"= {monthly_minutes:g} credit-minutes; free plan grants {k['free_monthly_credits']}/month, "
+            f"= {monthly_minutes:g} min = {monthly_minutes / 60:g} h x {k['credits_per_hour']} credits/h; "
+            f"free plan grants {k['free_monthly_credits']}/month, "
             f"each paid plan ${k['paid_monthly_usd']} adds {k['paid_monthly_credits']}; "
             f"seats x ${seat_price:g} = ${seat_cost:g}"
         ),
@@ -120,8 +124,8 @@ def main() -> int:
     rates = load_rates()
     sessions_month = args.sessions_per_day * DAYS_PER_MONTH
     rows = [
-        e2b_monthly(rates, args.minutes_per_session, args.vcpu, args.e2b_plan),
-        daytona_monthly(rates, args.minutes_per_session, args.vcpu, args.gib, args.gib_storage),
+        e2b_monthly(rates, args.minutes_per_session, args.vcpu, args.e2b_plan, sessions_month),
+        daytona_monthly(rates, args.minutes_per_session, args.vcpu, args.gib, args.gib_storage, sessions_month),
         credits_monthly(rates, args.sessions_per_day, args.minutes_per_session, args.vcpu, args.seats, args.seat_price),
     ]
     out = {
