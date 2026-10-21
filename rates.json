@@ -1,0 +1,32 @@
+{
+  "_note": "Published vendor rates, checked 2026-10-21. Every number carries the page it was read from. Change a rate here, not in the script.",
+  "e2b": {
+    "source": "https://e2b.dev/pricing",
+    "checked": "2026-10-21",
+    "billing": "per second of a running sandbox",
+    "per_second_by_vcpu": {"1": 0.000014, "2": 0.000028, "4": 0.000056, "6": 0.000084, "8": 0.000112},
+    "pro_base_monthly_usd": 150,
+    "hobby_one_time_credit_usd": 100,
+    "enterprise_monthly_minimum_usd": 3000
+  },
+  "daytona": {
+    "source": "https://www.daytona.io/pricing",
+    "checked": "2026-10-21",
+    "billing": "per second, priced from hourly component rates",
+    "vcpu_hour_usd": 0.0504,
+    "gib_memory_hour_usd": 0.0162,
+    "gib_storage_hour_usd": 0.000108,
+    "storage_free_gib": 5,
+    "free_compute_usd": 200
+  },
+  "kortix_credits": {
+    "source": "https://kortix.com/pricing",
+    "checked": "2026-10-21",
+    "free_monthly_credits": 500,
+    "free_projects": 1,
+    "paid_monthly_usd": 50,
+    "paid_monthly_credits": 5000,
+    "members_free": true,
+    "seat_price_usd": 0
+  }
+}
